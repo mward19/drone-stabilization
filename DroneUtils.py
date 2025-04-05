@@ -117,7 +117,7 @@ def control_from_state(state, costate, lambda_):
     theta = state[4]
     psi   = state[5]
 
-    R = rotation(phi, theta, phi)
+    R = rotation(phi, theta, psi)
     MI_inv = inv(mass_inertia_matrix())
 
 
@@ -183,7 +183,7 @@ def position_angle_double_prime(state, costate, lambda_):
     theta = state[4]
     psi   = state[5]
 
-    R = rotation(phi, theta, phi)
+    R = rotation(phi, theta, psi)
     MI = mass_inertia_matrix()
 
     control = control_from_state(state, costate, lambda_)
