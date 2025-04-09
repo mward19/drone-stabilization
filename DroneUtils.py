@@ -19,80 +19,72 @@ from numpy.linalg import inv
 
 
 
+import numpy as np
+
 def rotation(phi, theta, psi):
+    cphi, sphi = np.cos(phi), np.sin(phi)
+    ctheta, stheta = np.cos(theta), np.sin(theta)
+    cpsi, spsi = np.cos(psi), np.sin(psi)
+    # R = Rz(psi) @ Ry(theta) @ Rx(phi)
     return np.array([
-        [
-            cos(theta) * cos(psi), 
-            cos(theta) * sin(psi), 
-            -sin(theta)
-        ], 
-        [
-            sin(phi) * sin(theta) * cos(psi) - cos(phi) * sin(psi), 
-            sin(phi) * sin(theta) * sin(psi) + cos(phi) * cos(psi), 
-            sin(phi) * cos(theta)
-        ],
-        [
-            cos(phi) * sin(theta) * cos(psi) + sin(phi) * sin(psi),
-            cos(phi) * sin(theta) * sin(psi) - sin(phi) * cos(psi),
-            cos(phi) * cos(theta)
-        ]])
+        [ cpsi*ctheta,
+          cpsi*stheta*sphi - spsi*cphi,
+          cpsi*stheta*cphi + spsi*sphi ],
+        [ spsi*ctheta,
+          spsi*stheta*sphi + cpsi*cphi,
+          spsi*stheta*cphi - cpsi*sphi ],
+        [ -stheta,
+          ctheta*sphi,
+          ctheta*cphi ]
+    ])
 
 def rotation_phi(phi, theta, psi):
-    # Deriviating of the rotation matrix with respect to phi
+    cphi, sphi = np.cos(phi), np.sin(phi)
+    ctheta, stheta = np.cos(theta), np.sin(theta)
+    cpsi, spsi = np.cos(psi), np.sin(psi)
+    # ∂R/∂phi
     return np.array([
-        [
-            0,0,0
-        ],
-        [
-            cos(phi) * cos(psi) * sin(theta) * sin(phi) * sin(psi),
-            -cos(psi) * sin(phi) + cos(phi) * sin(theta) * sin(psi),
-            cos(theta) * cos(phi)
-        ],
-        [
-            -cos(psi) * sin(theta) * sin(phi) + cos(phi) * sin(psi),
-            -cos(phi) * cos(psi) - sin(theta) * sin(phi) * sin(psi),
-            -cos(theta) * sin(phi)
-        ]
+        [ 0,
+          cpsi*stheta*cphi + spsi*sphi,
+         -cpsi*stheta*sphi + spsi*cphi ],
+        [ 0,
+          spsi*stheta*cphi - cpsi*sphi,
+         -spsi*stheta*sphi - cpsi*cphi ],
+        [ 0,
+          ctheta*cphi,
+         -ctheta*sphi ]
     ])
 
 def rotation_theta(phi, theta, psi):
-    # Derivative of the rotation matrix with respect to theta
+    cphi, sphi = np.cos(phi), np.sin(phi)
+    ctheta, stheta = np.cos(theta), np.sin(theta)
+    cpsi, spsi = np.cos(psi), np.sin(psi)
+    # ∂R/∂theta
     return np.array([
-        [
-            -cos(psi) * sin(theta),
-            -sin(theta) * sin(psi),
-            -cos(theta)
-        ],
-        [
-            cos(theta) * cos(psi) * sin(phi),
-            cos(theta) * sin(phi) * sin(psi),
-            -sin(theta) * sin(phi)
-        ],
-        [
-            cos(theta) * cos(phi) * cos(psi),
-            cos(theta) * cos(phi) * sin(psi),
-            -cos(phi) * sin(theta)
-        ]
+        [ -cpsi*stheta,
+          cpsi*ctheta*sphi,
+          cpsi*ctheta*cphi ],
+        [ -spsi*stheta,
+          spsi*ctheta*sphi,
+          spsi*ctheta*cphi ],
+        [ -ctheta,
+         -stheta*sphi,
+         -stheta*cphi ]
     ])
 
 def rotation_psi(phi, theta, psi):
-    # Derivative of the rotation matrix with respect to psi
+    cphi, sphi = np.cos(phi), np.sin(phi)
+    ctheta, stheta = np.cos(theta), np.sin(theta)
+    cpsi, spsi = np.cos(psi), np.sin(psi)
+    # ∂R/∂psi
     return np.array([
-        [
-           -cos(theta) * sin(psi),
-            cos(theta) * cos(psi),
-            0
-        ],
-        [
-           -cos(phi) * cos(psi) - sin(theta) * sin(phi) * sin(psi),
-            cos(psi) * sin(theta) * sin(phi) - cos(phi) * sin(psi),
-            0
-        ],
-        [
-            cos(psi) * sin(phi) - cos(phi) * sin(theta) * sin(psi),
-            cos(phi) * cos(psi) * sin(theta) + sin(phi) * sin(psi),
-            0
-        ]
+        [ -spsi*ctheta,
+         -spsi*stheta*sphi - cpsi*cphi,
+         -spsi*stheta*cphi + cpsi*sphi ],
+        [  cpsi*ctheta,
+          cpsi*stheta*sphi - spsi*cphi,
+          cpsi*stheta*cphi + spsi*sphi ],
+        [  0, 0, 0 ]
     ])
 
 def mass_inertia_matrix(mass=10):
@@ -189,7 +181,7 @@ def position_angle_double_prime(state, costate, lambda_):
     control = control_from_state(state, costate, lambda_)
     
     return MI @ np.hstack([
-        R[:, 2] * np.sum(control), 
+        R[:, 2] * np.sum(control) - np.array([0, 0, 1]), 
         R @ [
             control[1] - control[3], 
             control[0] - control[2], 
