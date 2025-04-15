@@ -1,8 +1,6 @@
 import numpy as np
 
-import numpy as np
-
-def state_dot(state, c, inerx, inery, inerz, L, lam, g, m):
+def state_dot(state, control, iner_x, iner_y, iner_z, L, lam, g, m):
     # Unpack the state vector
     p, q, r, psi, theta, phi, u, v, w, x, y, z = state
     
@@ -19,9 +17,9 @@ def state_dot(state, c, inerx, inery, inerz, L, lam, g, m):
     #    raise ValueError("cos(theta) is too close to zero, possible singularity.")
     
     # Angular rates
-    pdot = ((inery - inerz) / inerx) * q * r + L / inerx * (c[2] + c[3] - c[0] - c[1])
-    qdot = ((inerz - inerx) / inery) * p * r + L / inery * (c[0] + c[2] - c[1] - c[3])
-    rdot = ((inerx - inery) / inerz) * p * q + lam / inerz * (c[1] + c[2] - c[0] - c[3])
+    pdot = ((iner_y - iner_z) / iner_x) * q * r + L / iner_x * (control[2] + control[3] - control[0] - control[1])
+    qdot = ((iner_z - iner_x) / iner_y) * p * r + L / iner_y * (control[0] + control[2] - control[1] - control[3])
+    rdot = ((iner_x - iner_y) / iner_z) * p * q + lam / iner_z * (control[1] + control[2] - control[0] - control[3])
 
     
     # Euler angle rates
@@ -32,7 +30,7 @@ def state_dot(state, c, inerx, inery, inerz, L, lam, g, m):
     # Linear acceleration
     udot = r * v - q * w - g * np.sin(theta)
     vdot = p * w - r * u + g * cos_theta * sin_phi
-    wdot = g * u - p * v + g * cos_theta * cos_phi - np.sum(c) / m
+    wdot = g * u - p * v + g * cos_theta * cos_phi - np.sum(control) / m
     
     # Position rates (inertial frame)
     xdot = (u * cos_phi * cos_psi +
@@ -52,137 +50,111 @@ def state_dot(state, c, inerx, inery, inerz, L, lam, g, m):
                      udot, vdot, wdot,
                      xdot, ydot, zdot])
 
-def costate_dot(state, costate, inerx, inery, inerz, g, alpha=0, beta=0, gamma=0):
-    # Unpack state and costate
-    p, q, r, psi, theta, phi, u, v, w, x, y, z = state
-    rho = costate
+def costate_dot(state, costate, iner_x, iner_y, iner_z, g, alpha, beta, gamma, delta):
+    # Unpack state variables
+    p, q, r = state[0], state[1], state[2]
+    theta, phi, psi = state[3], state[4], state[5]
+    u, v, w = state[6], state[7], state[8]
+    x, y, z = state[9], state[10], state[11]
+    
+    # Unpack costate components (ρ₁,...,ρ₁₂)
+    rh1, rh2, rh3, rh4, rh5, rh6, rh7, rh8, rh9, rh10, rh11, rh12 = costate
+    
+    # Precompute trigonometric functions and derived functions
+    sin_theta, cos_theta = np.sin(theta), np.cos(theta)
+    tan_theta, sec_theta = np.tan(theta), 1/np.cos(theta)
+    sin_phi, cos_phi = np.sin(phi), np.cos(phi)
+    sin_psi, cos_psi = np.sin(psi), np.cos(psi)
+    
+    dot = np.zeros(12)
+    
+    dot[0] = (iner_x * r * rh2)/iner_y - (iner_z * r * rh2)/iner_y \
+             - (iner_x * q * rh3)/iner_z + (iner_y * q * rh3)/iner_z \
+             - rh6 - w * rh8 + v * rh9
 
-    # Trig shortcuts
-    sin_phi = np.sin(phi)
-    cos_phi = np.cos(phi)
-    sin_theta = np.sin(theta)
-    cos_theta = np.cos(theta)
-    tan_theta = np.tan(theta)
-    sec_theta = 1 / cos_theta
-    sin_psi = np.sin(psi)
-    cos_psi = np.cos(psi)
+    dot[1] = - (iner_y * r * rh1)/iner_x + (iner_z * r * rh1)/iner_x \
+             - (iner_x * p * rh3)/iner_z + (iner_y * p * rh3)/iner_z \
+             - sec_theta * sin_phi * rh4 - cos_phi * rh5 \
+             - sin_phi * tan_theta * rh6 + w * rh7 - u * rh9
 
-    # Derivatives of costate
-    drho1 = (inerx * r * rho[1]) / inery - (inerz * r * rho[1]) / inery - \
-            (inerx * q * rho[2]) / inerz + (inery * q * rho[2]) / inerz - \
-            rho[5] - w * rho[7] + v * rho[8]
-    
-    drho2 = -((inery * r * rho[0]) / inerx) + (inerz * r * rho[0]) / inerx - \
-            (inerx * p * rho[2]) / inerz + (inery * p * rho[2]) / inerz - \
-            sec_theta * sin_phi * rho[3] - cos_phi * rho[4] - \
-            sin_phi * tan_theta * rho[5] + w * rho[6]
-    
-    drho3 = -((inery * q * rho[0]) / inerx) + (inerz * q * rho[0]) / inerx + \
-            (inerx * p * rho[1]) / inery - (inerz * p * rho[1]) / inery + \
-            sin_phi * rho[4] - cos_phi * sec_theta * (rho[3] + sin_theta * rho[5]) - \
-            v * rho[6] + u * rho[7]
-    
-    drho4 = 2 * alpha * psi + \
-            v * sin_theta * sin_phi * sin_psi * rho[9] - \
-            w * sin_phi * sin_psi * rho[10] - \
-            cos_psi * (w * sin_phi * rho[9] + u * cos_theta * rho[10] + v * sin_theta * sin_phi * rho[10]) + \
-            cos_phi * (sin_psi * (u * rho[9] + w * sin_theta * rho[9] + v * rho[10]) + \
-                       cos_psi * (v * rho[9] - w * sin_theta * rho[10]))
-    
-    drho5 = 2 * beta * theta - \
-            q * sec_theta * sin_phi * tan_theta * rho[3] - \
-            q * sec_theta**2 * sin_phi * rho[5] + \
-            g * cos_theta * rho[6] + \
-            u * sin_theta * sin_psi * rho[10] - \
-            u * cos_theta * rho[11] - \
-            cos_theta * sin_phi * (-g * tan_theta * rho[7] + \
-            v * cos_psi * rho[9] + v * sin_psi * rho[10] + v * tan_theta * rho[11]) - \
-            0.25 * cos_phi * (
-                4 * r * sec_theta**2 * rho[5] + \
-                sin_theta * (-3 * g * rho[8] - 4 * w * tan_theta * (cos_psi * rho[9] + sin_psi * rho[10]) + \
-                             3 * w * rho[11] + tan_theta**2 * (g * rho[8] - w * rho[11])) + \
-                sec_theta * (4 * w * (cos_psi * rho[9] + sin_psi * rho[10]) + \
-                             tan_theta * (4 * r * rho[3] - g * rho[8] + w * rho[11]))
-            )
-    
-    drho6 = 2 * beta * phi - q * cos_phi * sec_theta * rho[3] + \
-            r * cos_phi * rho[4] - q * cos_phi * tan_theta * rho[5] - \
-            g * cos_theta * cos_phi * rho[7] - \
-            v * cos_phi * cos_psi * sin_theta * rho[9] - \
-            w * cos_phi * sin_psi * rho[9] + \
-            w * cos_phi * cos_psi * rho[10] - \
-            v * cos_phi * sin_theta * sin_psi * rho[10] + \
-            v * cos_theta * cos_phi * rho[11] + \
-            0.25 * cos_theta * sin_phi * (
-                3 * g * rho[8] + \
-                4 * sec_theta * (q * rho[4] + r * tan_theta * rho[5] + \
-                                 u * cos_psi * rho[9] - v * sin_psi * rho[9] + \
-                                 v * cos_psi * rho[10]) + \
-                4 * w * tan_theta * (cos_psi * rho[9] + sin_psi * rho[10]) - \
-                3 * w * rho[11] + \
-                sec_theta**2 * (4 * r * rho[3] + g * rho[8] - w * rho[11]) + \
-                tan_theta**2 * (-g * rho[8] + w * rho[11])
-            )
-    
-    drho7 = r * rho[7] - g * rho[8] - \
-            cos_phi * cos_psi * rho[9] - \
-            cos_theta * sin_psi * rho[10] - \
-            sin_theta * rho[11]
-    
-    drho8 = -r * rho[6] + p * rho[8] + \
-            cos_phi * sin_psi * rho[9] - \
-            sin_theta * sin_phi * sin_psi * rho[10] - \
-            cos_psi * (sin_theta * sin_phi * rho[9] + cos_phi * rho[10]) + \
-            cos_theta * sin_phi * rho[11]
-    
-    drho9 = q * rho[6] - p * rho[7] + \
-            sin_phi * (-sin_psi * rho[9] + cos_psi * rho[10]) - \
-            cos_phi * (cos_psi * sin_theta * rho[9] + \
-                       sin_theta * sin_psi * rho[10] - \
-                       cos_theta * rho[11])
-    
-    drho10 = 2 * x * gamma
-    drho11 = 2 * y * gamma
-    drho12 = 2 * z * gamma
+    dot[2] = - (iner_y * q * rh1)/iner_x + (iner_z * q * rh1)/iner_x \
+             + (iner_x * p * rh2)/iner_y - (iner_z * p * rh2)/iner_y \
+             + sin_phi * rh5 - cos_phi * sec_theta * (rh4 + sin_theta * rh6) \
+             - v * rh7 + u * rh8
 
-    return np.array([
-        drho1, drho2, drho3,
-        drho4, drho5, drho6,
-        drho7, drho8, drho9,
-        drho10, drho11, drho12
-    ])
+    dot[3] = 2 * alpha * psi + u * cos_theta * sin_psi * rh10 \
+             + v * sin_theta * sin_phi * sin_psi * rh10 \
+             - w * sin_phi * sin_psi * rh11 \
+             - cos_psi * (w * sin_phi * rh10 + u * cos_theta * rh11 + v * sin_theta * sin_phi * rh11) \
+             + cos_phi * ( sin_psi * (w * sin_theta * rh10 + v * rh11) \
+             + cos_psi * (v * rh10 - w * sin_theta * rh11) )
 
-import numpy as np
+    dot[4] = 2 * beta * theta - q * sec_theta * sin_phi * tan_theta * rh4 \
+             - q * sec_theta**2 * sin_phi * rh6 + g * cos_theta * rh7 \
+             + u * cos_psi * sin_theta * rh10 + u * sin_theta * sin_psi * rh11 \
+             - u * cos_theta * rh12 \
+             - cos_theta * sin_phi * (-g * tan_theta * rh8 + v * cos_psi * rh10 \
+             + v * sin_psi * rh11 + v * tan_theta * rh12) \
+             - 0.25 * cos_phi * ( 4 * r * sec_theta**2 * rh6 \
+             + sin_theta * (-3 * g * rh9 - 4 * w * tan_theta * (cos_psi * rh10 + sin_psi * rh11) \
+             + 3 * w * rh12 + tan_theta**2 * (g * rh9 - w * rh12)) \
+             + sec_theta * (4 * w * (cos_psi * rh10 + sin_psi * rh11) \
+             + tan_theta * (4 * r * rh4 - g * rh9 + w * rh12)) )
 
-def optimal_control(rho, inerx, inery, inerz, L, lam, m):
-    # Precompute denominator
+    dot[5] = 2 * beta * phi - q * cos_phi * sec_theta * rh4 \
+             + r * cos_phi * rh5 - q * cos_phi * tan_theta * rh6 \
+             - g * cos_theta * cos_phi * rh8 \
+             - v * cos_phi * cos_psi * sin_theta * rh10 \
+             - w * cos_phi * sin_psi * rh10 + w * cos_phi * cos_psi * rh11 \
+             - v * cos_phi * sin_theta * sin_psi * rh11 \
+             + v * cos_theta * cos_phi * rh12 \
+             + 0.25 * cos_theta * sin_phi * ( 3 * g * rh9 \
+             + 4 * sec_theta * (q * rh5 + r * tan_theta * rh6 - v * sin_psi * rh10 + v * cos_psi * rh11) \
+             + 4 * w * tan_theta * (cos_psi * rh10 + sin_psi * rh11) \
+             - 3 * w * rh12 + sec_theta**2 * (4 * r * rh4 + g * rh9 - w * rh12) \
+             + tan_theta**2 * (-g * rh9 + w * rh12) )
+
+    dot[6] = r * rh8 - q * rh9 - cos_theta * (cos_psi * rh10 + sin_psi * rh11) - sin_theta * rh12
+
+    dot[7] = - r * rh7 + p * rh9 + cos_phi * sin_psi * rh10 \
+             - sin_theta * sin_phi * sin_psi * rh11 \
+             - cos_psi * (sin_theta * sin_phi * rh10 + cos_phi * rh11) \
+             + cos_theta * sin_phi * rh12
+
+    dot[8] = q * rh7 - p * rh8 + sin_phi * (-sin_psi * rh10 + cos_psi * rh11) \
+             - cos_phi * (cos_psi * sin_theta * rh10 + sin_theta * sin_psi * rh11 - cos_theta * rh12)
+
+    dot[9]  = 2 * x * gamma
+    dot[10] = 2 * y * gamma
+    dot[11] = 2 * z * delta
+
+    return dot
+
+
+def optimal_control(costate, inerx, inery, inerz, L, lam, m):
     denom = 2 * inerx * inery * inerz * m
+    c1 = (-inery * inerz * L * m * costate[1] +
+          inerx * inerz * L * m * costate[2] -
+          inerx * inery * m * lam * costate[3] -
+          inerx * inery * inerz * costate[9]) / denom
 
-    # Extract costates
-    rho1, rho2, rho3, _, _, _, _, _, rho9 = rho[:9]
+    c2 = (-inery * inerz * L * m * costate[1] -
+          inerx * inerz * L * m * costate[2] +
+          inerx * inery * m * lam * costate[3] -
+          inerx * inery * inerz * costate[9]) / denom
 
-    # Compute each control input
-    c1 = (-inery * inerz * L * m * rho1 +
-           inerx * inerz * L * m * rho2 -
-           inerx * inery * m * lam * rho3 -
-           inerx * inery * inerz * rho9) / denom
+    c3 = (inery * inerz * L * m * costate[1] +
+          inerx * inerz * L * m * costate[2] +
+          inerx * inery * m * lam * costate[3] -
+          inerx * inery * inerz * costate[9]) / denom
 
-    c2 = (-inery * inerz * L * m * rho1 -
-           inerx * inerz * L * m * rho2 +
-           inerx * inery * m * lam * rho3 -
-           inerx * inery * inerz * rho9) / denom
+    c4 = (inery * inerz * L * m * costate[1] -
+          inerx * inerz * L * m * costate[2] -
+          inerx * inery * m * lam * costate[3] -
+          inerx * inery * inerz * costate[9]) / denom
 
-    c3 = ( inery * inerz * L * m * rho1 +
-           inerx * inerz * L * m * rho2 +
-           inerx * inery * m * lam * rho3 -
-           inerx * inery * inerz * rho9) / denom
+    return (c1, c2, c3, c4)
 
-    c4 = ( inery * inerz * L * m * rho1 -
-           inerx * inerz * L * m * rho2 -
-           inerx * inery * m * lam * rho3 -
-           inerx * inery * inerz * rho9) / denom
-
-    return np.array([c1, c2, c3, c4])
 
 
 
