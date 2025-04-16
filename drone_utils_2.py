@@ -30,10 +30,10 @@ def state_dot(state, control, iner_x, iner_y, iner_z, L, lam, g, m):
     # Linear acceleration
     udot = r * v - q * w - g * np.sin(theta)
     vdot = p * w - r * u + g * cos_theta * sin_phi
-    wdot = g * u - p * v + g * cos_theta * cos_phi - np.sum(control) / m
+    wdot = q * u - p * v + g * cos_theta * cos_phi - np.sum(control) / m
     
     # Position rates (inertial frame)
-    xdot = (u * cos_phi * cos_psi +
+    xdot = (u * cos_theta * cos_psi +
             v * (sin_phi * sin_theta * cos_psi - cos_phi * sin_psi) +
             w * (cos_phi * sin_theta * cos_psi + sin_phi * sin_psi))
     
